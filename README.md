@@ -5,10 +5,9 @@ using a *separate* ESP32 + SX126x board as the transmitter.
 
 This repo is independent of `radugeo74/esphome-sx1262` (the project being
 tested). It does not copy or modify any of that project's decode logic
-(`t1_3of6.h`, `pure_dll_crc.h`). It only *reuses* that project's existing,
-unmodified `sx126x` ESPHome component (which already exposes a public
-`transmit_packet()` method) as an `external_components` source, the same way
-any ESPHome user would reuse any third-party component.
+(`t1_3of6.h`, `pure_dll_crc.h`). The TX board now uses the local `components/sx126x` copy in this repository
+through `external_components`; it does not fetch a changing branch during
+compilation. The TX lab is independent from the RX decoder under test.
 
 ## What's here
 
@@ -42,7 +41,11 @@ any ESPHome user would reuse any third-party component.
   press. Radio parameters (frequency, bitrate, deviation, bandwidth, sync
   word) are copied from `esphome-sx1262`'s own
   `experimental/semtech-radio/heltec-sx126x-combined-lab.yaml`, so the TX
-  board matches what the receiver under test expects to hear.
+  board matches what the receiver under test expects to hear. The transmitter
+  uses **fixed-length GFSK** (63 bytes for Lansen, 92 for FHKV), rather than
+  variable-length GFSK, because the latter inserts a length prefix that
+  would break T1 3-of-6 alignment. Each manual button press reconfigures
+  SX1262 for its packet length.
 
 - **`firmware/secrets.yaml.example`** — placeholder for Wi-Fi/OTA secrets
   referenced by the YAML. Copy it to `firmware/secrets.yaml` and fill in your
@@ -70,11 +73,12 @@ on-air capture.
 
 1. `cp firmware/secrets.yaml.example firmware/secrets.yaml` and fill in your
    Wi-Fi credentials.
-2. Open `firmware/tx-lab.yaml` and **adjust the `spi:`/`sx126x:` pin
-   assignments** to match your actual board wiring — the ones in the file
-   are placeholders, not verified against any specific board. Everything
-   *except* the pins (frequency, bitrate, deviation, bandwidth, sync word)
-   is copied from the receiver project's own lab YAML, so leave those as-is.
+2. Open `firmware/tx-lab.yaml` and verify **all hardware assumptions**
+   against the actual transmitter board: SPI and control GPIOs, RF switch,
+   TCXO voltage and antenna. The YAML follows the Heltec V3 lab pinout and
+   is **not** verified for a generic ESP32-S3 + SX1262 module.
+   Frequency, bitrate, deviation, bandwidth and sync are matched to the
+   receiver's T1 lab. TX power is conservatively set to 2 dBm.
 3. `esphome run firmware/tx-lab.yaml` (or compile+flash however you normally
    do it).
 4. In Home Assistant (or the ESPHome web UI), you'll see two buttons:
@@ -92,3 +96,17 @@ lab YAML with `meter_id: "00010206"` configured and confirm
 
 Test Lansen PU first (even-length frame, no padding ambiguity) before FHKV
 data III (odd-length frame, exercises the unverified padding path).
+
+## CI: compile before flashing
+
+GitHub Actions [Build wM-Bus T1 transmitter](.github/workflows/tx-lab-build.yml)
+runs on pushes to the TX firmware, encoder or local radio component. It tests
+the independent encoder with host g++, validates the YAML, and compiles the
+ESPHome 2026.10.1 firmware for ESP32-S3 with **dummy Wi-Fi/OTA credentials**.
+A green CI proves compilation only, **not** working RF, correct physical pinout,
+or a flashable image with your private Wi-Fi settings. Never flash the
+CI-generated dummy-credential firmware onto the production receiver.
+
+The encoder rejects malformed hex/L-field input by returning an empty byte
+vector (ESP-IDF builds without C++ exceptions). Both buttons check the encoded
+length and log failures rather than transmitting such a frame.
