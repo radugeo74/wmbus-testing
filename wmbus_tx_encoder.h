@@ -78,7 +78,7 @@ inline uint16_t crc16_en13757(const uint8_t *data, size_t len) {
 inline std::vector<uint8_t> insert_crc_format_a(const std::vector<uint8_t> &stripped) {
     if (stripped.empty()) return {};  // ESP-IDF defaults to -fno-exceptions
     const size_t L = stripped[0];
-    if (stripped.size() != L + 1) return {};
+    if (L < 10 || stripped.size() != L + 1) return {};
 
     std::vector<uint8_t> out;
     out.reserve(stripped.size() + 2 * 8);  // generous headroom for CRC bytes
@@ -249,7 +249,7 @@ int main() {
     assert(hex_to_bytes("ABX0").empty());
     assert(hex_to_bytes("ABC").empty());
     assert(insert_crc_format_a(hex_to_bytes("00")).empty());
-    std::printf("PASS encoder vectors and invalid-input guards\\n");
+    std::printf("PASS encoder vectors and invalid-input guards\n");
     return 0;
 }
 #endif  // WMBUS_TX_ENCODER_TEST_MAIN
