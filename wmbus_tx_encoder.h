@@ -38,7 +38,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <vector>
-#include <stdexcept>
+#include <algorithm>
 #include <string>
 
 namespace wmbus_tx {
@@ -76,10 +76,9 @@ inline uint16_t crc16_en13757(const uint8_t *data, size_t len) {
 //    confirmed against rtl-wmbus's cook_pkt(), not an assumption of mine).
 // ---------------------------------------------------------------------
 inline std::vector<uint8_t> insert_crc_format_a(const std::vector<uint8_t> &stripped) {
-    if (stripped.empty()) throw std::invalid_argument("empty telegram");
+    if (stripped.empty()) return {};  // ESP-IDF defaults to -fno-exceptions
     const size_t L = stripped[0];
-    if (stripped.size() != L + 1)
-        throw std::invalid_argument("stripped.size() must equal L-field + 1");
+    if (stripped.size() != L + 1) return {};
 
     std::vector<uint8_t> out;
     out.reserve(stripped.size() + 2 * 8);  // generous headroom for CRC bytes
@@ -161,17 +160,21 @@ inline std::vector<uint8_t> build_t1_tx_payload(const std::vector<uint8_t> &stri
 // byte vectors. Not part of the wM-Bus logic itself.
 // ---------------------------------------------------------------------
 inline std::vector<uint8_t> hex_to_bytes(const std::string &hex) {
-    if (hex.size() % 2 != 0) throw std::invalid_argument("odd-length hex string");
+    if (hex.empty() || (hex.size() % 2) != 0) return {};
     std::vector<uint8_t> out;
     out.reserve(hex.size() / 2);
     auto nib = [](char c) -> uint8_t {
         if (c >= '0' && c <= '9') return static_cast<uint8_t>(c - '0');
         if (c >= 'a' && c <= 'f') return static_cast<uint8_t>(c - 'a' + 10);
         if (c >= 'A' && c <= 'F') return static_cast<uint8_t>(c - 'A' + 10);
-        throw std::invalid_argument("bad hex digit");
+        return 0xFF;  // error sentinel, never a valid nibble
     };
-    for (size_t i = 0; i < hex.size(); i += 2)
-        out.push_back(static_cast<uint8_t>((nib(hex[i]) << 4) | nib(hex[i + 1])));
+    for (size_t i = 0; i < hex.size(); i += 2) {
+        const uint8_t hi = nib(hex[i]);
+        const uint8_t lo = nib(hex[i + 1]);
+        if (hi > 0x0F || lo > 0x0F) return {};
+        out.push_back(static_cast<uint8_t>((hi << 4) | lo));
+    }
     return out;
 }
 
@@ -203,6 +206,7 @@ inline const std::string kFhkvDataIIITelegramHex =
 // ---------------------------------------------------------------------
 #ifdef WMBUS_TX_ENCODER_TEST_MAIN
 #include <cstdio>
+#include <cassert>
 
 static void dump(const char *label, const std::vector<uint8_t> &v) {
     std::printf("%s (%zu bytes): ", label, v.size());
@@ -239,6 +243,13 @@ static void run_one(const char *name, const std::string &hex) {
 int main() {
     run_one("Lansen PU (id 00010206)", wmbus_tx::kLansenPuTelegramHex);
     run_one("FHKV data II/III (id 11776622)", wmbus_tx::kFhkvDataIIITelegramHex);
+    using namespace wmbus_tx;
+    assert(build_t1_tx_payload(hex_to_bytes(kLansenPuTelegramHex)).size() == 63);
+    assert(build_t1_tx_payload(hex_to_bytes(kFhkvDataIIITelegramHex)).size() == 92);
+    assert(hex_to_bytes("ABX0").empty());
+    assert(hex_to_bytes("ABC").empty());
+    assert(insert_crc_format_a(hex_to_bytes("00")).empty());
+    std::printf("PASS encoder vectors and invalid-input guards\\n");
     return 0;
 }
 #endif  // WMBUS_TX_ENCODER_TEST_MAIN
