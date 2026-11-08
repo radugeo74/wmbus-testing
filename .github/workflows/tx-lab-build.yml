@@ -26,7 +26,7 @@ jobs:
           esphome version
       - name: C++ test independent TX encoder
         run: |
-          printf '%s\\n' '#include "wmbus_tx_encoder.h"' | \\
+          printf '%s\n' '#include "wmbus_tx_encoder.h"' | \
             g++ -std=c++17 -Wall -Wextra -Werror -pedantic -I. \
               -DWMBUS_TX_ENCODER_TEST_MAIN -x c++ - \
               -o /tmp/wmbus-tx-encoder-test
