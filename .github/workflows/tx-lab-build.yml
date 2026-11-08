@@ -26,9 +26,10 @@ jobs:
           esphome version
       - name: C++ test independent TX encoder
         run: |
-          g++ -std=c++17 -Wall -Wextra -Werror -pedantic \
-            -DWMBUS_TX_ENCODER_TEST_MAIN -x c++ wmbus_tx_encoder.h \
-            -o /tmp/wmbus-tx-encoder-test
+          printf '#include "wmbus_tx_encoder.h"\\n' | \
+            g++ -std=c++17 -Wall -Wextra -Werror -pedantic -I. \
+              -DWMBUS_TX_ENCODER_TEST_MAIN -x c++ - \
+              -o /tmp/wmbus-tx-encoder-test
           /tmp/wmbus-tx-encoder-test
       - name: Set CI-only dummy credentials
         run: |
