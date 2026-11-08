@@ -1,0 +1,43 @@
+name: Build wM-Bus T1 transmitter
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tx-lab-build.yml'
+      - 'firmware/**'
+      - 'components/sx126x/**'
+      - 'wmbus_tx_encoder.h'
+  workflow_dispatch:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned ESPHome
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install esphome==2026.10.1
+          esphome version
+      - name: C++ test independent TX encoder
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic \
+            -DWMBUS_TX_ENCODER_TEST_MAIN -x c++ wmbus_tx_encoder.h \
+            -o /tmp/wmbus-tx-encoder-test
+          /tmp/wmbus-tx-encoder-test
+      - name: Set CI-only dummy credentials
+        run: |
+          cat > firmware/secrets.yaml <<'EOF'
+          wifi_ssid: "ci-placeholder-ssid"
+          wifi_password: "ci-placeholder-password"
+          ota_password: "ci-placeholder-ota"
+          EOF
+      - name: Validate configuration
+        run: esphome config firmware/tx-lab.yaml
+      - name: Compile firmware (no flash)
+        run: esphome compile firmware/tx-lab.yaml
