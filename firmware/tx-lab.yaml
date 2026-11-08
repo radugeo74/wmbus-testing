@@ -1,0 +1,98 @@
+# wM-Bus T1 test transmitter.
+#
+# Runs on a SEPARATE ESP32 + SX126x board from the receiver under test.
+# Sends the two wmbusmeters-fixture telegrams from wmbus_tx_encoder.h on
+# button press, encoded (CRC re-inserted + 3-of-6 packed) at the moment of
+# transmission.
+#
+# Radio parameters below (modulation/frequency/bitrate/deviation/bandwidth/
+# shaping/crc_enable/whitening_enable/sync_value/preamble_size) are copied
+# from radugeo74/esphome-sx1262's own
+# experimental/semtech-radio/heltec-sx126x-combined-lab.yaml, so this board
+# transmits on the same physical parameters the receiver under test expects.
+# The `sx126x:` component itself is pulled in, UNMODIFIED, from that same
+# repo via external_components -- nothing here copies or edits that
+# project's source.
+#
+# Pin assignments (spi:, cs_pin, reset_pin, busy_pin, dio1_pin) are
+# PLACEHOLDERS. Replace them with whatever your actual TX board's wiring is
+# before flashing.
+
+esphome:
+  name: wmbus-tx-lab
+  includes:
+    - ../wmbus_tx_encoder.h
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: arduino
+
+logger:
+  level: DEBUG
+
+api:
+
+ota:
+  platform: esphome
+  password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+# --- SPI bus to the SX126x module. ADJUST to your actual wiring. ---
+spi:
+  clk_pin: GPIO9
+  mosi_pin: GPIO10
+  miso_pin: GPIO11
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/radugeo74/esphome-sx1262
+      ref: experimental/xmq-multidriver-auto
+    components: [ sx126x ]
+    refresh: 0s
+
+sx126x:
+  id: tx_radio
+  # --- Pins below are PLACEHOLDERS. Adjust to your actual TX board. ---
+  cs_pin: GPIO8
+  reset_pin: GPIO12
+  busy_pin: GPIO13
+  dio1_pin: GPIO14
+
+  # --- Radio parameters below copied from esphome-sx1262's own
+  #     heltec-sx126x-combined-lab.yaml, confirmed during the audit. ---
+  modulation: FSK
+  frequency: 868950000
+  bitrate: 100000
+  deviation: 50000
+  bandwidth: 234_3kHz
+  shaping: NONE
+  crc_enable: false
+  whitening_enable: false
+  sync_value: [0x54, 0x3D]
+  preamble_size: 2
+
+button:
+  - platform: template
+    name: "Send Lansen PU test telegram"
+    on_press:
+      - lambda: |-
+          auto payload = wmbus_tx::build_t1_tx_payload(
+              wmbus_tx::hex_to_bytes(wmbus_tx::kLansenPuTelegramHex));
+          id(tx_radio)->transmit_packet(payload.data(), payload.size());
+          ESP_LOGI("wmbus_tx", "Sent Lansen PU telegram (%zu bytes on air)",
+                    payload.size());
+
+  - platform: template
+    name: "Send FHKV data III test telegram"
+    on_press:
+      - lambda: |-
+          auto payload = wmbus_tx::build_t1_tx_payload(
+              wmbus_tx::hex_to_bytes(wmbus_tx::kFhkvDataIIITelegramHex));
+          id(tx_radio)->transmit_packet(payload.data(), payload.size());
+          ESP_LOGI("wmbus_tx", "Sent FHKV data III telegram (%zu bytes on air)",
+                    payload.size());
