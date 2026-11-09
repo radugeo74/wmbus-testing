@@ -65,9 +65,9 @@ This prints, for both test telegrams: the CRC-stripped input, the frame with
 CRC blocks re-inserted, and the final 3-of-6 packed bytes ready for
 `transmit_packet()`. For Lansen PU it also confirms the exact byte count
 (42 → 63 bytes, 2-source-bytes-to-3-packed-bytes exactly, no padding
-needed). For FHKV data III it prints a note that the trailing 12 bits were
-padded — that's the one part of the encoder not yet confirmed against a real
-on-air capture.
+needed). For FHKV data III it prints a note that the trailing 4 bits were
+zero-padded — that's the one part of the encoder not yet confirmed against a
+real on-air capture.
 
 ### 2. Flash the TX board
 
