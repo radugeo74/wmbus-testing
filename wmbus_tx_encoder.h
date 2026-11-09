@@ -105,15 +105,19 @@ inline std::vector<uint8_t> insert_crc_format_a(const std::vector<uint8_t> &stri
 //    each byte first, matching how rtl-wmbus's decoder consumes bits
 //    (t1_rx_high_nibble_first_data_bit runs before the low-nibble state).
 //
-//    Bits are packed MSB-first into bytes. 2 source bytes -> 12 bits -> ...
-//    -> 24 bits -> exactly 3 packed bytes, so packing is byte-exact every
-//    2 input bytes. If the input has an ODD number of bytes, 12 leftover
-//    bits remain at the end; this implementation right-pads them with
-//    zero bits to fill the final byte. I have NOT verified this padding
-//    value against an actual on-air capture -- flagging it explicitly
-//    rather than asserting it's correct. Both test payloads below have an
-///   EVEN byte count after CRC insertion, so this edge case does not
-//    affect them.
+//    Bits are packed MSB-first into bytes. 2 source bytes -> 4 nibbles ->
+//    24 bits -> exactly 3 packed bytes, so packing is byte-exact every 2
+//    input bytes. If the input has an ODD number of bytes, the last source
+//    byte adds 12 bits: 8 of them complete a packed byte and the remaining
+//    4 bits are right-padded with zero bits to fill the final byte
+//    (example: 61 source bytes -> 732 bits -> 92 packed bytes, i.e. 4
+//    padding bits). I have NOT verified this padding value against an
+//    actual on-air capture -- flagging it explicitly rather than asserting
+//    it's correct. The reference receiver should not be affected, because
+//    it decodes only floor(bits / 6) symbols and ignores the leftover bits.
+//    The Lansen PU test payload below has an EVEN byte count after CRC
+//    insertion (42), so it does not exercise this edge case; the FHKV data
+//    III payload has an ODD count (61) and does.
 // ---------------------------------------------------------------------
 inline std::vector<uint8_t> pack_3of6_t1(const std::vector<uint8_t> &frame_with_crc) {
     static const uint8_t code_of_nibble[16] = {
@@ -236,7 +240,7 @@ static void run_one(const char *name, const std::string &hex) {
                     expected, tx_payload.size(),
                     expected == tx_payload.size() ? "OK" : "MISMATCH");
     } else {
-        std::printf("odd-length frame: trailing 12 bits padded (see header note).\n");
+        std::printf("odd-length frame: trailing 4 bits zero-padded (see header note).\n");
     }
 }
 
